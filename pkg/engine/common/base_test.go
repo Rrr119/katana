@@ -222,3 +222,49 @@ func TestEnqueueDomainPageBudget(t *testing.T) {
 		require.Equal(t, 100, q.Len())
 	})
 }
+
+// TestEnqueueKnownFilesScope mirrors how known-file parsers (robots.txt,
+// sitemap.xml, feed.xml) hand navigation requests to the queue: they carry the
+// crawl root hostname, so the regular scope rules must apply to them too.
+func TestEnqueueKnownFilesScope(t *testing.T) {
+	writer := &mockWriter{}
+	// Default rdn DNS scope: only example.com and its subdomains are in scope.
+	scopeManager, err := scope.NewManager(nil, nil, "rdn", false)
+	require.NoError(t, err)
+
+	crawlerOpts := &types.CrawlerOptions{
+		Options: &types.Options{
+			MaxDepth: 3,
+			Strategy: "depth-first",
+		},
+		OutputWriter:        writer,
+		UniqueFilter:        newMockFilter(),
+		ScopeManager:        scopeManager,
+		ExtensionsValidator: extensions.NewValidator(nil, nil, true),
+	}
+	shared := &Shared{Options: crawlerOpts}
+	q, _ := queue.New("depth-first")
+
+	shared.Enqueue(q,
+		// Same registrable domain: enqueued.
+		&navigation.Request{Method: http.MethodGet, URL: "https://example.com/feed/found", Depth: 2, RootHostname: "example.com", Tag: "file", Attribute: "feedxml"},
+		// Subdomain of the root: enqueued.
+		&navigation.Request{Method: http.MethodGet, URL: "https://blog.example.com/post", Depth: 2, RootHostname: "example.com", Tag: "file", Attribute: "sitemapxml"},
+		// Foreign host found inside a feed: dropped by scope.
+		&navigation.Request{Method: http.MethodGet, URL: "https://evil.example.org/leak", Depth: 2, RootHostname: "example.com", Tag: "file", Attribute: "feedxml"},
+	)
+
+	require.Equal(t, 2, q.Len())
+	var queued []string
+	items := q.Pop()
+	for range 2 {
+		item := <-items
+		queued = append(queued, item.(*navigation.Request).URL)
+		q.Done()
+	}
+	require.ElementsMatch(t, queued, []string{
+		"https://example.com/feed/found",
+		"https://blog.example.com/post",
+	})
+	require.Empty(t, writer.results, "out-of-scope items are not output unless DisplayOutScope is set")
+}

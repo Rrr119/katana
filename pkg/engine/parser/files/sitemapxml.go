@@ -60,22 +60,17 @@ func (r *sitemapXmlCrawler) parseReader(reader io.Reader, resp *http.Response) (
 	if err := xml.NewDecoder(reader).Decode(&sitemap); err != nil {
 		return nil, errkit.Wrap(err, "sitemapcrawler: could not decode xml")
 	}
+	navResp := &navigation.Response{
+		Depth:        2,
+		Resp:         resp,
+		RootHostname: resp.Request.URL.Hostname(),
+		StatusCode:   resp.StatusCode,
+		Headers:      utils.FlattenHeaders(resp.Header),
+	}
 	for _, url := range sitemap.URLs {
-		navResp := &navigation.Response{
-			Depth:      2,
-			Resp:       resp,
-			StatusCode: resp.StatusCode,
-			Headers:    utils.FlattenHeaders(resp.Header),
-		}
 		navigationRequests = append(navigationRequests, navigation.NewNavigationRequestURLFromResponse(strings.Trim(url.Loc, " \t\n"), resp.Request.URL.String(), "file", "sitemapxml", navResp))
 	}
 	for _, url := range sitemap.Sitemap {
-		navResp := &navigation.Response{
-			Depth:      2,
-			Resp:       resp,
-			StatusCode: resp.StatusCode,
-			Headers:    utils.FlattenHeaders(resp.Header),
-		}
 		navigationRequests = append(navigationRequests, navigation.NewNavigationRequestURLFromResponse(strings.Trim(url.Loc, " \t\n"), resp.Request.URL.String(), "file", "sitemapxml", navResp))
 	}
 	return

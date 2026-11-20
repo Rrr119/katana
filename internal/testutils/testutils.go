@@ -79,4 +79,34 @@ var TestCases = []TestCase{
 			return errkit.Newf("expected %v target in output, but got %v", target, strings.Join(got, "\n"))
 		},
 	},
+	{
+		Name:   "Known Files Feed XML Parser",
+		Target: "",
+		Args:   "-kf feedxml -depth 3 -silent",
+		CompareFunc: func(target string, got []string) error {
+			joined := strings.Join(got, "\n")
+			if !strings.Contains(joined, "/feed/article") {
+				return errkit.Newf("feed parser should discover /feed/article, got: %s", joined)
+			}
+			if strings.Contains(joined, "external.example.net") {
+				return errkit.Newf("scope control must drop the external feed link, got: %s", joined)
+			}
+			return nil
+		},
+	},
+	{
+		Name:   "Known Files All Parsers",
+		Target: "",
+		Args:   "-kf all -depth 3 -silent",
+		CompareFunc: func(target string, got []string) error {
+			if len(got) < 3 {
+				return errkit.Newf("expected combined known-file crawlers to still produce output, got %d: %v", len(got), got)
+			}
+			joined := strings.Join(got, "\n")
+			if strings.Contains(joined, "external.example.net") {
+				return errkit.Newf("out-of-scope feed link leaked with -kf all, got: %s", joined)
+			}
+			return nil
+		},
+	},
 }

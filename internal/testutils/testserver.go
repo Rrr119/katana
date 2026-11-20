@@ -122,6 +122,33 @@ fetch("%s/api/data").then(r => r.json());`, baseURL)
 		_, _ = fmt.Fprint(w, `{"status":"ok"}`)
 	})
 
+	mux.HandleFunc("/feed.xml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Test Feed</title>
+    <link>%s/</link>
+    <item>
+      <title>Feed Article</title>
+      <link>%s/feed/article</link>
+    </item>
+    <item>
+      <title>External partner</title>
+      <link>https://external.example.net/partner</link>
+    </item>
+  </channel>
+</rss>`, baseURL, baseURL)
+	})
+
+	mux.HandleFunc("/feed/article", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><title>Feed Article</title></head>
+<body><a href="%s/">Home</a></body>
+</html>`, baseURL)
+	})
+
 	go func() {
 		_ = http.Serve(listener, mux)
 	}()

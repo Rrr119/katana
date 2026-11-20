@@ -132,7 +132,7 @@ CONFIGURATION:
    -jc, -js-crawl                enable endpoint parsing / crawling in javascript file
    -jsl, -jsluice                enable jsluice parsing in javascript file (memory intensive)
    -ct, -crawl-duration value    maximum duration to crawl the target for (s, m, h, d) (default s)
-   -kf, -known-files string      enable crawling of known files (all,robotstxt,sitemapxml), a minimum depth of 3 is required to ensure all known files are properly crawled.
+   -kf, -known-files string      enable crawling of known files (all,robotstxt,sitemapxml,feedxml), a minimum depth of 3 is required to ensure all known files are properly crawled.
    -mrs, -max-response-size int  maximum response size to read (default 4194304)
    -timeout int                  time to wait for request in seconds (default 10)
    -aff, -automatic-form-fill    enable automatic form filling (experimental)
@@ -643,10 +643,14 @@ katana -u https://tesla.com -ct 2
 
 *`-known-files`*
 ----
-Option to enable crawling `robots.txt` and `sitemap.xml` file, disabled as default.
+Option to enable crawling well-known files, disabled as default. Supported values are `robotstxt` (`/robots.txt`), `sitemapxml` (`/sitemap.xml`), `feedxml` (`/feed.xml` RSS/Atom feeds) and `all` which enables every parser. URLs discovered this way go through the same scope validation, depth limiting, and JSONL/text output pipeline as any other navigation request.
 
 ```
 katana -u https://tesla.com -kf robotstxt,sitemapxml
+```
+
+```
+katana -u https://tesla.com -kf feedxml
 ```
 
 *`-automatic-form-fill`*
@@ -857,7 +861,7 @@ CONFIGURATION:
    -d, -depth int                maximum depth to crawl (default 3)
    -jc, -js-crawl                enable endpoint parsing / crawling in javascript file
    -ct, -crawl-duration int      maximum duration to crawl the target for
-   -kf, -known-files string      enable crawling of known files (all,robotstxt,sitemapxml)
+   -kf, -known-files string      enable crawling of known files (all,robotstxt,sitemapxml,feedxml)
    -mrs, -max-response-size int  maximum response size to read (default 9223372036854775807)
    -timeout int                  time to wait for request in seconds (default 10)
    -aff, -automatic-form-fill    enable automatic form filling (experimental)

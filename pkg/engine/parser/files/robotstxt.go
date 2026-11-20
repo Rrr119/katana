@@ -53,10 +53,11 @@ func (r *robotsTxtCrawler) parseReader(reader io.Reader, resp *http.Response) (n
 		directive := strings.ToLower(splitted[0])
 		if strings.HasPrefix(directive, "allow") || strings.EqualFold(directive, "disallow") {
 			navResp := &navigation.Response{
-				Depth:      2,
-				Resp:       resp,
-				StatusCode: resp.StatusCode,
-				Headers:    utils.FlattenHeaders(resp.Header),
+				Depth:        2,
+				Resp:         resp,
+				RootHostname: resp.Request.URL.Hostname(),
+				StatusCode:   resp.StatusCode,
+				Headers:      utils.FlattenHeaders(resp.Header),
 			}
 			navRequest := navigation.NewNavigationRequestURLFromResponse(strings.Trim(splitted[1], " "), resp.Request.URL.String(), "file", "robotstxt", navResp)
 			navigationRequests = append(navigationRequests, navRequest)

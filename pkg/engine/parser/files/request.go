@@ -11,6 +11,7 @@ type visitFunc func(ctx context.Context, URL string) ([]*navigation.Request, err
 
 type KnownFiles struct {
 	parsers    []visitFunc
+	kinds      []string
 	httpclient *retryablehttp.Client
 }
 
@@ -21,16 +22,24 @@ func New(httpclient *retryablehttp.Client, files string) *KnownFiles {
 	}
 	switch files {
 	case "robotstxt":
-		crawler := &robotsTxtCrawler{httpclient: httpclient}
-		parser.parsers = append(parser.parsers, crawler.Visit)
+		parser.parsers = append(parser.parsers, (&robotsTxtCrawler{httpclient: httpclient}).Visit)
+		parser.kinds = append(parser.kinds, "robotstxt")
 	case "sitemapxml":
-		crawler := &sitemapXmlCrawler{httpclient: httpclient}
-		parser.parsers = append(parser.parsers, crawler.Visit)
+		parser.parsers = append(parser.parsers, (&sitemapXmlCrawler{httpclient: httpclient}).Visit)
+		parser.kinds = append(parser.kinds, "sitemapxml")
+	case "feedxml":
+		parser.parsers = append(parser.parsers, (&feedXmlCrawler{httpclient: httpclient}).Visit)
+		parser.kinds = append(parser.kinds, "feedxml")
 	default:
-		crawler := &robotsTxtCrawler{httpclient: httpclient}
-		parser.parsers = append(parser.parsers, crawler.Visit)
-		another := &sitemapXmlCrawler{httpclient: httpclient}
-		parser.parsers = append(parser.parsers, another.Visit)
+		// "all" (and any unrecognized value, for backward compatibility with
+		// callers that do not go through CLI enum validation) runs every parser
+		// in a fixed order so crawl output stays deterministic.
+		parser.parsers = append(parser.parsers,
+			(&robotsTxtCrawler{httpclient: httpclient}).Visit,
+			(&sitemapXmlCrawler{httpclient: httpclient}).Visit,
+			(&feedXmlCrawler{httpclient: httpclient}).Visit,
+		)
+		parser.kinds = append(parser.kinds, "robotstxt", "sitemapxml", "feedxml")
 	}
 	return parser
 }
