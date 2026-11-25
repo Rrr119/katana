@@ -514,6 +514,9 @@ func (c *Crawler) crawlFn(ctx context.Context, action *types.Action, page *brows
 	}
 
 	for _, nav := range navigations {
+		if nav.Type == types.ActionTypeFillForm && !c.options.AutomaticFormFill {
+			continue
+		}
 		actionHash := nav.Hash()
 		if _, ok := c.uniqueActions[actionHash]; ok {
 			continue

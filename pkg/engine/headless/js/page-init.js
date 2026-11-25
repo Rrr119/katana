@@ -21,7 +21,7 @@
   
     // hookNavigatedLinkSinks hooks the navigated link sinks
     // on the page to capture all the navigated links.
-    function hookNavigatedLinkSinks() {
+    function hookNavigatedLinkSinks(captureRequests) {
       window.__navigatedLinks = [];
   
       // Hook history.pushState and history.replaceState to capture all the navigated links
@@ -53,31 +53,36 @@
         });
       });
   
-      const __OrigWebSocket = window.WebSocket;
-      function __WrappedWebSocket(url, protocols) {
-        try { window.__navigatedLinks.push({ url, source: "websocket" }); } catch (_) {}
-        return Reflect.construct(__OrigWebSocket, [url, protocols], new.target || __WrappedWebSocket);
-      }
-      __WrappedWebSocket.prototype = __OrigWebSocket.prototype;
-      Object.setPrototypeOf(__WrappedWebSocket, __OrigWebSocket);
-      Object.defineProperty(window, "WebSocket", { value: __WrappedWebSocket, writable: false, configurable: false });
+      // Request sinks are only useful to the interactive crawler. Keeping them
+      // out of ordinary crawls avoids serializing every fetch/XHR URL at each
+      // state check.
+      if (captureRequests) {
+        const __OrigWebSocket = window.WebSocket;
+        function __WrappedWebSocket(url, protocols) {
+          try { window.__navigatedLinks.push({ url, source: "websocket" }); } catch (_) {}
+          return Reflect.construct(__OrigWebSocket, [url, protocols], new.target || __WrappedWebSocket);
+        }
+        __WrappedWebSocket.prototype = __OrigWebSocket.prototype;
+        Object.setPrototypeOf(__WrappedWebSocket, __OrigWebSocket);
+        Object.defineProperty(window, "WebSocket", { value: __WrappedWebSocket, writable: false, configurable: false });
 
-      const __OrigEventSource = window.EventSource;
-      function __WrappedEventSource(url, eventSourceInitDict) {
-        try { window.__navigatedLinks.push({ url, source: "eventsource" }); } catch (_) {}
-        return Reflect.construct(__OrigEventSource, [url, eventSourceInitDict], new.target || __WrappedEventSource);
+        const __OrigEventSource = window.EventSource;
+        function __WrappedEventSource(url, eventSourceInitDict) {
+          try { window.__navigatedLinks.push({ url, source: "eventsource" }); } catch (_) {}
+          return Reflect.construct(__OrigEventSource, [url, eventSourceInitDict], new.target || __WrappedEventSource);
+        }
+        __WrappedEventSource.prototype = __OrigEventSource.prototype;
+        Object.setPrototypeOf(__WrappedEventSource, __OrigEventSource);
+        Object.defineProperty(window, "EventSource", { value: __WrappedEventSource, writable: false, configurable: false });
+
+        const __origFetch = window.fetch.bind(window);
+        function __wrappedFetch(...args) {
+          const url = args[0] instanceof Request ? args[0].url : args[0];
+          try { window.__navigatedLinks.push({ url: url, source: "fetch" }); } catch (_) {}
+          return __origFetch(...args);
+        }
+        Object.defineProperty(window, "fetch", { value: __wrappedFetch, writable: false, configurable: false });
       }
-      __WrappedEventSource.prototype = __OrigEventSource.prototype;
-      Object.setPrototypeOf(__WrappedEventSource, __OrigEventSource);
-      Object.defineProperty(window, "EventSource", { value: __WrappedEventSource, writable: false, configurable: false });
-  
-      const __origFetch = window.fetch.bind(window);
-      function __wrappedFetch(...args) {
-        const url = args[0] instanceof Request ? args[0].url : args[0];
-        try { window.__navigatedLinks.push({ url: url, source: "fetch" }); } catch (_) {}
-        return __origFetch(...args);
-      }
-      Object.defineProperty(window, "fetch", { value: __wrappedFetch, writable: false, configurable: false });
     }
   
     // hookMiscellaneousUtilities performs miscellaneous hooks
@@ -163,8 +168,10 @@
     }
   
     // Main hook initialization part
-    const __opts = window.__katanaHooksOptions || { hooked: false };
+    const __opts = window.__katanaHooksOptions || { hooked: false, navigationSinks: false };
     try { if (__opts.hooked === true) hookAddEventListener(); } catch (_) {}
-    try { if (__opts.hooked === true) hookNavigatedLinkSinks(); } catch (_) {}
+    // SPA route changes are invisible to network-only discovery, so capture
+    // history/hash/window.open sinks on ordinary crawls too.
+    try { if (__opts.hooked === true || __opts.navigationSinks === true) hookNavigatedLinkSinks(__opts.hooked === true); } catch (_) {}
     try { if (__opts.hooked === true) hookMiscellaneousUtilities(); } catch (_) {}
   })();

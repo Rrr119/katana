@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid36820",
+  "B": "/home/dev/feedback/uid36820",
+  "sha": "87945d3d62311bf6dfff77dcca76c721b3df5c47",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "projectdiscovery",
+    "repo": "katana",
+    "sha": "87945d3d62311bf6dfff77dcca76c721b3df5c47"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "katana",
+    "cloneUrl": "https://github.com/Rrr119/katana.git"
+  },
+  "at": "2026-11-25T00:06:32.173Z"
+}

@@ -385,6 +385,26 @@ func TestBodyParsers(t *testing.T) {
 			require.Equal(t, "https://security-crawl-maze.app/test/html/body/form/action-post.found", navigationRequests[0].URL, "could not get correct url")
 			require.Equal(t, "POST", navigationRequests[0].Method, "could not get correct method")
 		})
+		t.Run("skips unsafe controls and keeps checkboxes", func(t *testing.T) {
+			documentReader, _ := goquery.NewDocumentFromReader(strings.NewReader(`<form action="/submit" method="POST">
+				<input name="email">
+				<input type="hidden" name="csrf">
+				<input type="hidden" name="nonce" value="abc">
+				<input type="checkbox" name="remember">
+				<input type="submit" name="go" value="Go">
+				<input type="file" name="upload">
+			</form>`))
+			resp := &navigation.Response{Resp: &http.Response{Request: &http.Request{URL: parsed.URL}}, Reader: documentReader}
+			navigationRequests := bodyFormTagParser(nil)(resp)
+			require.Len(t, navigationRequests, 1)
+			body := navigationRequests[0].Body
+			require.Contains(t, body, "remember=on")
+			require.Contains(t, body, "nonce=abc")
+			require.Contains(t, body, "email=")
+			require.NotContains(t, body, "csrf=")
+			require.NotContains(t, body, "go=")
+			require.NotContains(t, body, "upload=")
+		})
 	})
 
 	t.Run("meta", func(t *testing.T) {

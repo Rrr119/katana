@@ -300,11 +300,14 @@ func (b *BrowserPage) FindNavigations() ([]*types.Action, error) {
 	navLinks, err := b.GetNavigatedLinks()
 	if err == nil {
 		for _, link := range navLinks {
-			if link.URL == "" {
+			if link.URL == "" || !b.shouldFollowNavigatedLink(link.Source) {
 				continue
 			}
 			resolved, err := resolveURL(info.URL, link.URL)
 			if err != nil {
+				continue
+			}
+			if scopeValidator != nil && !scopeValidator(resolved) {
 				continue
 			}
 			if _, found := unique[resolved]; found {
@@ -319,6 +322,37 @@ func (b *BrowserPage) FindNavigations() ([]*types.Action, error) {
 	}
 
 	return navigations, nil
+}
+
+func (b *BrowserPage) shouldFollowNavigatedLink(source string) bool {
+	if isRouteNavigation(source) {
+		return true
+	}
+	// Interactive mode historically followed request sinks as well; keep that
+	// behaviour behind the opt-in flag.
+	return b.launcher.opts.Interactive && isRequestNavigation(source)
+}
+
+// isRouteNavigation reports whether a navigation sink carries a client-side
+// route. fetch and websocket sinks are intentionally excluded here: they are
+// request endpoints, not pages, and following them as documents produces many
+// false 404s. They are still available through traffic/XHR export.
+func isRouteNavigation(source string) bool {
+	switch source {
+	case "history.pushState", "history.replaceState", "hashchange", "window.open":
+		return true
+	default:
+		return false
+	}
+}
+
+func isRequestNavigation(source string) bool {
+	switch source {
+	case "fetch", "websocket", "eventsource":
+		return true
+	default:
+		return false
+	}
 }
 
 func (b *BrowserPage) GetAllElements(selector string) ([]*types.HTMLElement, error) {

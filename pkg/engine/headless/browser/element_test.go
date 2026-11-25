@@ -45,3 +45,22 @@ func TestShouldStopLazyScroll(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRouteNavigation(t *testing.T) {
+	for _, source := range []string{"history.pushState", "history.replaceState", "hashchange", "window.open"} {
+		require.True(t, isRouteNavigation(source), source)
+	}
+	for _, source := range []string{"fetch", "websocket", "eventsource", ""} {
+		require.False(t, isRouteNavigation(source), source)
+	}
+}
+
+func TestShouldFollowNavigatedLink(t *testing.T) {
+	ordinary := &BrowserPage{launcher: &Launcher{}}
+	require.True(t, ordinary.shouldFollowNavigatedLink("history.pushState"))
+	require.False(t, ordinary.shouldFollowNavigatedLink("fetch"))
+
+	interactive := &BrowserPage{launcher: &Launcher{opts: LauncherOptions{Interactive: true}}}
+	require.True(t, interactive.shouldFollowNavigatedLink("fetch"))
+	require.False(t, interactive.shouldFollowNavigatedLink("unknown"))
+}

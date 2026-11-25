@@ -136,14 +136,23 @@ func FormInputFillSuggestionsWithDecider(ctx context.Context, d decider.Decider,
 
 	// Fill checkboxes and radioboxes first or default values first
 	for _, input := range inputs {
-		switch input.Type {
+		if strings.TrimSpace(input.Name) == "" || inputIsDisabled(input) {
+			continue
+		}
+
+		switch normalizeFormInputType(input.Type) {
+		case "submit", "button", "reset", "image", "file":
+			// These controls are not successful form fields. Clicking a
+			// submit button is handled by the browser engine, not by the
+			// value map.
+			continue
 		case "radio":
 			// Use a single radio name per value
 			if !data.Has(input.Name) {
-				data.Set(input.Name, input.Value)
+				data.Set(input.Name, formControlValue(input))
 			}
 		case "checkbox":
-			data.Set(input.Name, input.Value)
+			data.Set(input.Name, formControlValue(input))
 
 		default:
 			// A real value wins. Placeholder text is only a fallback after
@@ -166,10 +175,21 @@ func FormInputFillSuggestionsWithDecider(ctx context.Context, d decider.Decider,
 
 	// Fill rest of the inputs based on their types or name and ids
 	for _, input := range inputs {
+		if strings.TrimSpace(input.Name) == "" || inputIsDisabled(input) {
+			continue
+		}
 		if input.Value != "" {
 			continue
 		}
-		switch input.Type {
+		switch normalizeFormInputType(input.Type) {
+		case "hidden", "submit", "button", "reset", "image", "file":
+			// An empty hidden field has no value the server would accept, and
+			// synthetic values can break CSRF/nonce checks. Leave it empty.
+			continue
+		case "checkbox", "radio":
+			// Already covered by the first pass, including the implicit "on"
+			// value the browser submits for a checked control without value.
+			continue
 		case "color":
 			data.Set(input.Name, FormData.Color)
 		case "number", "range":
@@ -194,6 +214,30 @@ func FormInputFillSuggestionsWithDecider(ctx context.Context, d decider.Decider,
 		}
 	}
 	return data
+}
+
+// normalizeFormInputType applies the HTML default. An input without a type is
+// a text input, so leaving it empty must not hide it from the fill logic.
+func normalizeFormInputType(inputType string) string {
+	inputType = strings.ToLower(strings.TrimSpace(inputType))
+	if inputType == "" {
+		return "text"
+	}
+	return inputType
+}
+
+// formControlValue returns the value a checked checkbox/radio submits. HTML
+// defaults the value to "on" when the attribute is absent.
+func formControlValue(input FormInput) string {
+	if input.Value != "" {
+		return input.Value
+	}
+	return "on"
+}
+
+func inputIsDisabled(input FormInput) bool {
+	_, disabled := input.Attributes.Get("disabled")
+	return disabled
 }
 
 // FormSelectFill fills a map with selected values from a slice of FormSelect structs.

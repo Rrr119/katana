@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/projectdiscovery/katana/pkg/engine/headless/browser"
 	"github.com/projectdiscovery/katana/pkg/engine/headless/types"
@@ -66,6 +67,18 @@ func (c *Crawler) processForm(ctx context.Context, page *browser.BrowserPage, fo
 	var formFields []interface{}
 	var submitButton *rod.Element
 	elementMap := make(map[string]*rod.Element)
+	var formElement *rod.Element
+	if form.XPath != "" {
+		element, err := page.ElementX(form.XPath)
+		if err != nil {
+			c.logger.Debug("Could not find form element",
+				slog.String("xpath", form.XPath),
+				slog.String("error", err.Error()),
+			)
+		} else {
+			formElement = element
+		}
+	}
 
 	for _, field := range form.Elements {
 		if field.XPath == "" {
@@ -85,8 +98,8 @@ func (c *Crawler) processForm(ctx context.Context, page *browser.BrowserPage, fo
 
 		switch field.TagName {
 		case "INPUT":
-			if field.Type == "submit" || field.Type == "button" {
-				if submitButton == nil && field.Type == "submit" {
+			if field.Type == "submit" || field.Type == "image" || field.Type == "button" {
+				if submitButton == nil && (field.Type == "submit" || field.Type == "image") {
 					submitButton = element
 				}
 				continue
@@ -120,6 +133,9 @@ func (c *Crawler) processForm(ctx context.Context, page *browser.BrowserPage, fo
 	}
 
 	fillSuggestions := utilsformfill.FormFillSuggestionsWithDecider(ctx, c.options.FormDecider, formFields)
+	if fillSuggestions.Len() == 0 && submitButton == nil {
+		return nil
+	}
 
 	if err := c.applyFormSuggestions(fillSuggestions, elementMap); err != nil {
 		c.logger.Debug("Error applying form suggestions", slog.String("error", err.Error()))
@@ -127,6 +143,22 @@ func (c *Crawler) processForm(ctx context.Context, page *browser.BrowserPage, fo
 
 	if submitButton != nil {
 		if err := submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// A form does not need an explicit submit control: pressing Enter in a
+	// text field submits it. requestSubmit() preserves submit listeners that
+	// SPAs rely on, unlike form.submit().
+	if formElement != nil {
+		if _, err := formElement.Eval(`() => {
+			if (typeof this.requestSubmit === "function") {
+				this.requestSubmit();
+			} else {
+				this.submit();
+			}
+		}`); err != nil {
 			return err
 		}
 	}
@@ -188,40 +220,50 @@ func (c *Crawler) applyFormSuggestions(suggestions mapsutil.OrderedMap[string, s
 
 		switch tagName.Value.String() {
 		case "INPUT":
-			inputType, _ := element.Attribute("type")
-			if inputType != nil {
-				switch *inputType {
-				case "checkbox", "radio":
-					if value == "on" || value == fieldName {
-						if err := element.Click(proto.InputMouseButtonLeft, 1); err != nil {
-							c.logger.Debug("Failed to check input",
-								slog.String("field", fieldName),
-								slog.String("type", *inputType),
-								slog.String("error", err.Error()),
-							)
-						}
+			inputType := "text"
+			if attribute, _ := element.Attribute("type"); attribute != nil && strings.TrimSpace(*attribute) != "" {
+				inputType = strings.ToLower(strings.TrimSpace(*attribute))
+			}
+			switch inputType {
+			case "checkbox", "radio":
+				controlValue := "on"
+				if attribute, _ := element.Attribute("value"); attribute != nil && *attribute != "" {
+					controlValue = *attribute
+				}
+				if value == "on" || value == fieldName || value == controlValue {
+					if checked, err := element.Eval(`() => this.checked === true`); err == nil && checked.Value.Bool() {
+						return true
 					}
-				case "date", "time", "datetime-local", "month", "week":
-					// chrome ignores typed text in these pickers, so the value is set directly
-					if _, err := element.Eval(`(v) => {
-						this.value = v;
-						this.dispatchEvent(new Event("input", {bubbles: true}));
-						this.dispatchEvent(new Event("change", {bubbles: true}));
-					}`, value); err != nil {
-						c.logger.Debug("Failed to set input value",
+					if err := element.Click(proto.InputMouseButtonLeft, 1); err != nil {
+						c.logger.Debug("Failed to check input",
 							slog.String("field", fieldName),
-							slog.String("type", *inputType),
+							slog.String("type", inputType),
 							slog.String("error", err.Error()),
 						)
 					}
-				default:
-					if err := element.Input(value); err != nil {
-						c.logger.Debug("Failed to fill input field",
-							slog.String("field", fieldName),
-							slog.String("value", value),
-							slog.String("error", err.Error()),
-						)
-					}
+				}
+			case "hidden", "submit", "button", "reset", "image", "file":
+				// Not text-fillable. Hidden values are submitted as-is.
+			case "date", "time", "datetime-local", "month", "week":
+				// chrome ignores typed text in these pickers, so the value is set directly
+				if _, err := element.Eval(`(v) => {
+					this.value = v;
+					this.dispatchEvent(new Event("input", {bubbles: true}));
+					this.dispatchEvent(new Event("change", {bubbles: true}));
+				}`, value); err != nil {
+					c.logger.Debug("Failed to set input value",
+						slog.String("field", fieldName),
+						slog.String("type", inputType),
+						slog.String("error", err.Error()),
+					)
+				}
+			default:
+				if err := element.Input(value); err != nil {
+					c.logger.Debug("Failed to fill input field",
+						slog.String("field", fieldName),
+						slog.String("value", value),
+						slog.String("error", err.Error()),
+					)
 				}
 			}
 

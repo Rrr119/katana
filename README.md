@@ -655,6 +655,7 @@ katana -u https://tesla.com -kf robotstxt,sitemapxml
 Option to enable automatic form filling for known / unknown fields, known field values can be customized as needed by updating form config file at `$HOME/.config/katana/form-config.yaml`.
 
 Automatic form filling is experimental feature.
+It works in standard, headless (`-hl`) and hybrid (`-hh`) modes: standard/hybrid submit the filled form through the HTTP parser, while headless fills and submits the live DOM so JavaScript submit handlers run. Hidden fields with an existing value are preserved, and fields that cannot be filled safely are left untouched.
 
 ```
 katana -u https://tesla.com -aff
@@ -670,6 +671,17 @@ placeholder: "rand_first_name()"
 password: 'rand_base(16, "")'
 color: "#e66465"
 ```
+
+### SPA coverage benchmark
+
+`cmd/tools/spa-coverage` runs three deterministic SPA fixtures (hash routing, history API routing, and a JavaScript-handled form) and compares discovered routes with a manually verified manifest. The same fixtures back the browser e2e test, so the benchmark and tests cannot drift apart.
+
+```console
+go run ./cmd/tools/spa-coverage -katana ./katana -modes standard,headless,hybrid
+go run ./cmd/tools/spa-coverage -katana ./katana -modes headless -json spa-coverage.json -min-coverage 0.75
+```
+
+The table reports `covered/expected` per site and per mode plus missing paths. Headless mode executes page JavaScript, follows history/hash route changes, and fills/submits the form; standard mode provides the non-rendered baseline. See [`docs/spa-coverage.md`](docs/spa-coverage.md) for the fixture routes and methodology.
 
 *`-filter-similar`*
 ----

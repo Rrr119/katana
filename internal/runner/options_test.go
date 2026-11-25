@@ -129,6 +129,26 @@ func TestValidateHeadlessFlags(t *testing.T) {
 		err := validateOptions(opts)
 		require.NoError(t, err)
 	})
+
+	t.Run("automatic form fill is preserved in every crawl mode", func(t *testing.T) {
+		for _, mode := range []struct {
+			name             string
+			headless, hybrid bool
+		}{
+			{name: "standard"},
+			{name: "headless", headless: true},
+			{name: "hybrid", hybrid: true},
+		} {
+			t.Run(mode.name, func(t *testing.T) {
+				opts := newTestOptions()
+				opts.Headless = mode.headless
+				opts.HeadlessHybrid = mode.hybrid
+				opts.AutomaticFormFill = true
+				require.NoError(t, validateOptions(opts))
+				require.True(t, opts.AutomaticFormFill, "-aff must not be silently disabled")
+			})
+		}
+	})
 }
 
 func TestValidateRecordedFlow(t *testing.T) {

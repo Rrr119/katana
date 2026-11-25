@@ -181,6 +181,14 @@ func (e *HTMLElement) Hash() string {
 	for _, k := range stableAttrs {
 		parts = append(parts, fmt.Sprintf("%s:%s", k, e.Attributes[k]))
 	}
+	// Buttons and clickable containers frequently have no id/class/href and
+	// are distinguished only by their label. Without this fallback every such
+	// control collapses to the same action hash and only the first is crawled.
+	if e.ID == "" && len(stableAttrs) == 0 {
+		if text := normalizedText(e.TextContent); text != "" {
+			parts = append(parts, "text:"+text)
+		}
+	}
 
 	hashInput := strings.Join(parts, "|")
 	if IsDiagnosticEnabled {
@@ -241,20 +249,28 @@ func (f *HTMLForm) Hash() string {
 // getStableAttributes returns a sorted slice of attribute keys that are considered stable.
 func getStableAttributes(attrs map[string]string) []string {
 	stableKeys := map[string]struct{}{
-		"id":          {},
-		"name":        {},
-		"type":        {},
-		"href":        {},
-		"src":         {},
-		"action":      {},
-		"method":      {},
-		"placeholder": {},
-		"onclick":     {},
+		"id":              {},
+		"name":            {},
+		"type":            {},
+		"href":            {},
+		"src":             {},
+		"action":          {},
+		"method":          {},
+		"placeholder":     {},
+		"onclick":         {},
+		"value":           {},
+		"title":           {},
+		"role":            {},
+		"aria-label":      {},
+		"aria-labelledby": {},
+		"formaction":      {},
+		"form":            {},
+		"alt":             {},
 	}
 
 	var stableAttrs []string
 	for key := range attrs {
-		if _, exists := stableKeys[key]; exists {
+		if _, exists := stableKeys[key]; exists || strings.HasPrefix(key, "data-") {
 			stableAttrs = append(stableAttrs, key)
 		}
 	}
@@ -263,6 +279,15 @@ func getStableAttributes(attrs map[string]string) []string {
 	sort.Strings(stableAttrs)
 
 	return stableAttrs
+}
+
+func normalizedText(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	const maxLength = 120
+	if len(value) > maxLength {
+		return value[:maxLength]
+	}
+	return value
 }
 
 type EventListener struct {

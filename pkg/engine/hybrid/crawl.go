@@ -524,6 +524,7 @@ func (c *Crawler) navigateRequest(s *common.CrawlSession, request *navigation.Re
 		}
 	}
 
+	renderedBodyChanged := response.Body != body
 	response.Body = body
 	if response.Reader != nil {
 		response.Reader.Url, _ = url.Parse(request.URL)
@@ -535,6 +536,13 @@ func (c *Crawler) navigateRequest(s *common.CrawlSession, request *navigation.Re
 	response.Reader, err = goquery.NewDocumentFromReader(strings.NewReader(response.Body))
 	if err != nil {
 		return nil, errkit.Wrap(err, "hybrid: could not parse html")
+	}
+	// The response-stage hijack parses the raw HTTP body. JavaScript-rendered
+	// links and forms only exist in the DOM snapshot, so feed that snapshot to
+	// the same parser when it differs. Queue deduplication handles overlap.
+	if renderedBodyChanged && !c.StopForBlock(response.Resp, request.URL) {
+		navigationRequests := c.Options.Parser.ParseResponse(response)
+		c.Enqueue(s.Queue, navigationRequests...)
 	}
 
 	response.XhrRequests = xhrRequests

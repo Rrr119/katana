@@ -238,6 +238,60 @@ func TestFormInputPreservesExistingValue(t *testing.T) {
 	require.Equal(t, "abc123", val, "pre-filled values should be kept")
 }
 
+func TestFormInputDoesNotInventHiddenValues(t *testing.T) {
+	inputs := []FormInput{
+		{Name: "csrf", Type: "hidden"},
+		{Name: "nonce", Type: "HIDDEN"},
+	}
+	result := FormInputFillSuggestions(inputs)
+	require.Zero(t, result.Len(), "empty hidden fields must stay empty so CSRF checks are not broken")
+}
+
+func TestFormInputSkipsNonFillableControls(t *testing.T) {
+	inputs := []FormInput{
+		{Name: "submit", Type: "submit", Value: "Send"},
+		{Name: "reset", Type: "reset", Value: "Reset"},
+		{Name: "button", Type: "button", Value: "Go"},
+		{Name: "upload", Type: "file"},
+		{Name: "image", Type: "image", Value: "go.png"},
+	}
+	result := FormInputFillSuggestions(inputs)
+	require.Zero(t, result.Len(), "only successful text-like controls should be filled")
+}
+
+func TestFormInputDefaultsMissingTypeAndControlValues(t *testing.T) {
+	original := FormData
+	defer func() { FormData = original }()
+	FormData = DefaultFormFillData
+
+	inputs := []FormInput{
+		{Name: "email"},
+		{Name: "remember", Type: "checkbox"},
+		{Name: "plan", Type: "radio"},
+	}
+	result := FormInputFillSuggestions(inputs)
+
+	email, ok := result.Get("email")
+	require.True(t, ok)
+	require.Equal(t, DefaultFormFillData.Email, email, "a missing type is a text input")
+
+	remember, _ := result.Get("remember")
+	require.Equal(t, "on", remember, "unchecked controls without value submit as on")
+	plan, _ := result.Get("plan")
+	require.Equal(t, "on", plan)
+}
+
+func TestFormInputSkipsUnnamedAndDisabledControls(t *testing.T) {
+	disabled := mapsutil.NewOrderedMap[string, string]()
+	disabled.Set("disabled", "")
+	inputs := []FormInput{
+		{Name: "", Type: "text"},
+		{Name: "locked", Type: "text", Attributes: disabled},
+	}
+	result := FormInputFillSuggestions(inputs)
+	require.Zero(t, result.Len())
+}
+
 func TestCustomFormConfigOverridesDefaults(t *testing.T) {
 	original := FormData
 	defer func() { FormData = original }()

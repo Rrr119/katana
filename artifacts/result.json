@@ -1,0 +1,18 @@
+{
+  "uid": "36820",
+  "harness": "Codex CLI",
+  "snapshotUrl": "https://github.com/Rrr119/katana/commit/87945d3d62311bf6dfff77dcca76c721b3df5c47",
+  "harnessVersion": "codex-cli 0.167.2",
+  "operatingSystem": "Ubuntu 26.04.1 LTS",
+  "operatingSystemCell": [
+    "MacOS/Linux"
+  ],
+  "outputDirectory": "/home/dev/feedback/uid36820",
+  "wslDistro": "Ubuntu-26.04",
+  "B": {
+    "success": false,
+    "canceled": true,
+    "error": "任务已取消",
+    "side": "B"
+  }
+}
